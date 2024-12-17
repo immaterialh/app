@@ -1,0 +1,119 @@
+<body>
+    <style>
+        /* tabs */
+        #nav input { display: none; }
+        #nav label:first-of-type { border-radius: 10px 0 0 0; }
+        #nav label:last-of-type  { border-radius: 0 10px 0 0; }
+        #nav label {
+            background: #ccc; text-align: center;
+            border: 2px solid #8ad; border-bottom: 2px solid #8ad;
+            padding: 5px 0; margin-bottom: -1px; }
+        #nav label:hover           { background: #c0d0dd; }
+        #nav input:checked + label { background: #dbedff; border-bottom: 0; }
+
+        /* tab content */
+        article {
+            background: #def;
+            border: 2px solid #8ad; border-top: 0;
+            border-radius: 0 0 10px 10px;
+            padding: 1px 1em 1em;
+            min-height: 10em; }
+        
+        /* switches */
+        input[type=checkbox] {
+            appearance: none; position: relative; vertical-align: middle;
+            width: 4em; height: 2em; border-radius: 1em; padding:0.25em;
+            background: #aaa; transition: .3s; }
+        input[type=checkbox]::after {
+            content: ""; position: absolute;
+            width: 1.5em; height: 1.5em; border-radius: 1em;
+            background: #eee; transition: .3s; }
+        input[type=checkbox]:checked        { background: #afa; }
+        input[type=checkbox]:checked::after { background: #fff; margin-left: 50%; }
+        input[type=checkbox].d3             { box-shadow: 1px 3px 2px #0008 inset; }
+        input[type=checkbox].d3::after      { box-shadow: 1px 3px 2px #0008; }
+        input[type=checkbox].border         { box-shadow: 1px 3px 5px #0008; }
+        input[type=checkbox].border::after  { box-shadow: 1px 3px 5px #0008 inset; background: #def; }
+    </style>
+
+    <grid style="display:grid; grid-template: auto / auto 300px; gap:10px">
+        <div>
+            <nav id="nav" style="display:grid; grid-auto-flow:column; gap:1px; border-bottom: 2px solid #8ad">
+                <input id="tabHome" type="radio" name="nav" checked>
+                <label for="tabHome">Home</label>
+
+                <input id="tabMaint" type="radio" name="nav">
+                <label for="tabMaint">Maintenance</label>
+
+                <input id="tabAccount" type="radio" name="nav">
+                <label for="tabAccount">Account</label>
+            </nav>
+
+            <article id="main"></article>
+        </div>
+        
+        <div style="display:grid; grid-template: auto 30px / auto; gap:5px;">
+            <textarea id="chat" readonly></textarea>
+            <input id="msg" type="text" />
+        </div>
+    </grid>
+</body>
+
+<script>
+    const tab_click = async e => {
+        console.log("tab_click", e.target.id);
+        var response = await fetch(`data/${e.target.id}.html`);
+        var data = await response.text();
+        console.log(data);
+        history.pushState("",0,"#" + e.target.id);
+        main.innerHTML = data;
+    };
+
+    var target = tabHome;
+    for(el of nav.getElementsByTagName('input')) {
+        el.addEventListener('input', tab_click);
+        if(document.location.hash == "#" + el.id) target = el;
+    }
+    tab_click({ target });
+    target.checked = true;
+
+    // long-poll
+    let myName = "Jim,Bob,Sue,Sam,Jane,Rob,Dave,Obi2,Anakin".split(",")[Math.random()*9|0];
+    const poll = async (s = "") => {
+        try {
+            const r = await fetch("/poll/" + s);
+
+            if (r.status == 502) { // timeout - reconnect after 3s
+                serverMessage("<Server Timeout>");
+                poll();
+            } else if(r.status == 200) { // ok
+                serverMessage(await r.text());
+                poll();
+            } else { // error - display and reconnect after 3s
+                serverMessage("<Server Error: " + response.statusText + ">");
+                setTimeout(poll, 3000);
+            }
+        }
+        catch(e) {
+            serverMessage("<Connection Error>");
+            return setTimeout(poll, 3000);
+        }
+    };
+    const serverMessage = m => {
+        chat.value += m + "\n";
+        chat.scrollTop = chat.scrollHeight;
+    };
+    poll(myName);
+
+    msg.onkeyup = e => {
+        if(e.key != 'Enter') return;
+        if(msg.value.startsWith('name=')) {
+            fetch("/send/" + myName + " renamed self to " + msg.value.slice(5));
+            myName = msg.value.slice(5);
+            msg.value = "";
+            return;
+        }
+        fetch("/send/" + myName + ": " + msg.value);
+        msg.value = "";
+    };
+</script>
